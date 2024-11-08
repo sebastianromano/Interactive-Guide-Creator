@@ -1,6 +1,6 @@
 import { elements } from './domElements.js';
 import { videoSettings, presentationSettings } from './settings.js';
-import { drawingUtils, fileUtils } from './utils.js';
+import { drawingUtils, fileUtils, animationUtils } from './utils.js';
 
 export class VideoRecorder {
     constructor(parentElement) {
@@ -13,6 +13,11 @@ export class VideoRecorder {
         this.parentElement = parentElement;
         this.settings = { ...videoSettings };
         this.settingsPanel = this.createSettingsPanel();
+        this.currentText = '';
+        this.targetText = '';
+        this.textProgress = 0;
+        this.lastFrameTime = 0;
+
         this.initializeUI();
         this.setupRecordButton();
     }
@@ -154,39 +159,103 @@ export class VideoRecorder {
         const points = window.pointManager.getPoints();
         if (!img || points.length === 0) return;
 
+        const frameInterval = 1000 / this.settings.fps;
+        let lastFrameTime = performance.now();
+        let currentRotation = 0;
+
         for (let i = 0; i < points.length; i++) {
-            // Draw initial state
-            await this.drawFrameWithZoom(img, points, i, 1);
-            await this.sleep(500); // Short pause before zoom
+            // Initial pause with no rotation
+            await this.smoothAnimation(async (progress) => {
+                await this.drawFrameWithZoom(img, points, i, 1, '', 1, 0);
+            }, 500);
 
-            // Zoom in
-            await this.animateZoom(img, points, i, 1, presentationSettings.zoomScale, presentationSettings.zoomDuration);
-            await this.sleep(presentationSettings.pointDisplayTime);
+            // Start typewriter effect before zoom
+            this.targetText = points[i].description;
+            this.currentText = '';
+            this.textProgress = 0;
 
-            // Zoom out
-            await this.animateZoom(img, points, i, presentationSettings.zoomScale, 1, presentationSettings.zoomDuration);
+            // Smooth zoom in with easing and typewriter
+            await this.smoothAnimation(async (progress) => {
+                const easedProgress = this.easeInOutCubic(progress);
+                const scale = 1 + (presentationSettings.zoomScale - 1) * easedProgress;
 
-            // Pause between points
+                // Update typewriter text
+                this.textProgress = Math.min(progress * 1.5, 1); // Slightly faster than zoom
+                this.currentText = this.targetText.slice(0, Math.floor(this.textProgress * this.targetText.length));
+
+                await this.drawFrameWithZoom(img, points, i, scale, this.currentText, 1, easedProgress);
+            }, presentationSettings.zoomDuration);
+
+            // Hold at zoomed state
+            await this.smoothAnimation(async (progress) => {
+                await this.drawFrameWithZoom(img, points, i, presentationSettings.zoomScale, this.targetText, 1, 1);
+            }, presentationSettings.pointDisplayTime);
+
+            // Smooth zoom out with easing - now includes rotation reset
+            await this.smoothAnimation(async (progress) => {
+                const easedProgress = this.easeInOutCubic(progress);
+                const scale = presentationSettings.zoomScale - (presentationSettings.zoomScale - 1) * easedProgress;
+
+                // Fade out text
+                const textOpacity = 1 - easedProgress;
+                // Gradually reduce rotation to 0 as we zoom out
+                const rotationStrength = 1 - easedProgress;
+
+                await this.drawFrameWithZoom(img, points, i, scale, this.targetText, textOpacity, rotationStrength);
+            }, presentationSettings.zoomDuration);
+
+            // Pause between points with no rotation
             if (i < points.length - 1) {
-                await this.sleep(presentationSettings.transitionDelay);
+                await this.smoothAnimation(async (progress) => {
+                    await this.drawFrameWithZoom(img, points, i, 1, '', 1, 0);
+                }, presentationSettings.transitionDelay);
             }
         }
+
+        // Add final hold on the complete image
+        await this.smoothAnimation(async (progress) => {
+            await this.drawFrameWithZoom(img, points, points.length - 1, 1, '', 1, 0);
+        }, 2000); // Hold for 2 seconds, adjust time as needed
 
         this.stopRecording();
     }
 
-    async animateZoom(img, points, pointIndex, startScale, endScale, duration) {
-        const steps = duration / (1000 / this.settings.fps);
-        const scaleStep = (endScale - startScale) / steps;
+    async smoothAnimation(drawFrame, duration) {
+        const startTime = performance.now();
+        const frameInterval = 1000 / this.settings.fps;
 
-        for (let i = 0; i <= steps; i++) {
-            const currentScale = startScale + (scaleStep * i);
-            await this.drawFrameWithZoom(img, points, pointIndex, currentScale);
-            await this.sleep(1000 / this.settings.fps);
-        }
+        return new Promise(async (resolve) => {
+            const animate = async () => {
+                if (!this.isRecording) {
+                    resolve(); // Make sure we resolve if recording is stopped
+                    return;
+                }
+
+                const currentTime = performance.now();
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                await drawFrame(progress);
+
+                if (progress < 1) {
+                    const frameTime = performance.now();
+                    const timeToNextFrame = Math.max(0, frameInterval - (frameTime - this.lastFrameTime));
+                    this.lastFrameTime = frameTime;
+                    setTimeout(animate, timeToNextFrame);
+                } else {
+                    resolve();
+                }
+            };
+
+            animate();
+        });
     }
 
-    async drawFrameWithZoom(imageElement, points, pointIndex, scale) {
+    easeInOutCubic(x) {
+        return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+
+    async drawFrameWithZoom(imageElement, points, pointIndex, scale, text, textOpacity = 1, rotationStrength = 1) {
         const point = points[pointIndex];
 
         // Clear the canvas
@@ -200,16 +269,24 @@ export class VideoRecorder {
         const scaledWidth = imageElement.naturalWidth * baseScale;
         const scaledHeight = imageElement.naturalHeight * baseScale;
 
-        // Calculate zoom center point
-        const centerX = (point.x / 100) * scaledWidth;
-        const centerY = (point.y / 100) * scaledHeight;
+        // Add slight randomization to zoom center for more natural feel
+        const randomOffset = scale > 1 ? Math.sin(performance.now() / 1000) * 0.2 * rotationStrength : 0;
+        const centerX = (point.x / 100) * scaledWidth + randomOffset;
+        const centerY = (point.y / 100) * scaledHeight + randomOffset;
 
-        // Calculate offsets for centered image
         const baseOffsetX = (this.canvas.width - scaledWidth) / 2;
         const baseOffsetY = (this.canvas.height - scaledHeight) / 2;
 
-        // Save context state
         this.ctx.save();
+
+        // Add rotation that smoothly reduces to 0 when zooming out
+        if (scale > 1 || rotationStrength > 0) {
+            const baseRotation = Math.sin(performance.now() / 2000) * 0.015;
+            const currentRotation = baseRotation * rotationStrength;
+            this.ctx.translate(this.canvas.width / 2, this.canvas.height / 2);
+            this.ctx.rotate(currentRotation);
+            this.ctx.translate(-this.canvas.width / 2, -this.canvas.height / 2);
+        }
 
         // Move to zoom center point
         this.ctx.translate(
@@ -226,7 +303,11 @@ export class VideoRecorder {
             -(baseOffsetY + centerY)
         );
 
-        // Draw image
+        // Draw image with slight motion blur when zooming
+        if (scale !== 1) {
+            this.ctx.filter = 'blur(0.5px)';
+        }
+
         this.ctx.drawImage(
             imageElement,
             baseOffsetX,
@@ -235,16 +316,97 @@ export class VideoRecorder {
             scaledHeight
         );
 
-        // Draw points
-        drawingUtils.drawPoints(this.ctx, points, pointIndex, baseOffsetX, baseOffsetY, scaledWidth, scaledHeight);
+        this.ctx.filter = 'none';
 
-        // Restore context state
+        // Draw points with subtle animation
+        this.drawAnimatedPoints(points, pointIndex, baseOffsetX, baseOffsetY, scaledWidth, scaledHeight);
+
         this.ctx.restore();
 
-        // Draw description
-        if (point.description) {
-            drawingUtils.drawDescription(this.ctx, point.description, this.canvas.width, this.canvas.height);
+        // Draw description with dynamic opacity
+        if (text) {
+            this.drawEnhancedDescription(text, textOpacity);
         }
+    }
+
+    drawAnimatedPoints(points, currentIndex, offsetX, offsetY, scaledWidth, scaledHeight) {
+        const time = performance.now();
+
+        points.forEach((point, index) => {
+            const x = offsetX + (point.x / 100) * scaledWidth;
+            const y = offsetY + (point.y / 100) * scaledHeight;
+
+            // Pulse animation for current point
+            let radius = 15;
+            if (index === currentIndex) {
+                radius += Math.sin(time / 200) * 2;
+            }
+
+            // Draw point with subtle gradient
+            const gradient = this.ctx.createRadialGradient(x, y, 0, x, y, radius);
+            if (index === currentIndex) {
+                gradient.addColorStop(0, 'rgba(255, 50, 50, 0.8)');
+                gradient.addColorStop(1, 'rgba(255, 50, 50, 0)');
+            } else {
+                gradient.addColorStop(0, 'rgba(200, 200, 200, 0.5)');
+                gradient.addColorStop(1, 'rgba(200, 200, 200, 0)');
+            }
+
+            this.ctx.beginPath();
+            this.ctx.arc(x, y, radius, 0, 2 * Math.PI);
+            this.ctx.fillStyle = gradient;
+            this.ctx.fill();
+        });
+    }
+
+    drawEnhancedDescription(text, opacity = 1) {
+        const fontSize = Math.floor(this.canvas.height / 30);
+        const padding = fontSize;
+        const maxWidth = this.canvas.width * 0.8;
+
+        this.ctx.save();
+
+        // Create gradient background
+        const gradient = this.ctx.createLinearGradient(
+            0, this.canvas.height - fontSize * 4,
+            0, this.canvas.height
+        );
+        gradient.addColorStop(0, `rgba(0, 0, 0, 0)`);
+        gradient.addColorStop(0.2, `rgba(0, 0, 0, ${0.8 * opacity})`);
+        gradient.addColorStop(1, `rgba(0, 0, 0, ${0.8 * opacity})`);
+
+        this.ctx.fillStyle = gradient;
+        this.ctx.fillRect(0, this.canvas.height - fontSize * 4, this.canvas.width, fontSize * 4);
+
+        // Draw text with shadow
+        this.ctx.font = `${fontSize}px Arial`;
+        this.ctx.textAlign = 'center';
+        this.ctx.textBaseline = 'middle';
+        this.ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
+        this.ctx.shadowBlur = 4;
+
+        // Draw text with opacity
+        this.ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+
+        // Word wrap
+        const words = text.split(' ');
+        let line = '';
+        let y = this.canvas.height - fontSize * 2;
+
+        words.forEach(word => {
+            const testLine = line + word + ' ';
+            const metrics = this.ctx.measureText(testLine);
+            if (metrics.width > maxWidth) {
+                this.ctx.fillText(line, this.canvas.width / 2, y);
+                line = word + ' ';
+                y += fontSize;
+            } else {
+                line = testLine;
+            }
+        });
+        this.ctx.fillText(line, this.canvas.width / 2, y);
+
+        this.ctx.restore();
     }
 
     sleep(ms) {
