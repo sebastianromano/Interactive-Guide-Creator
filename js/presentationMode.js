@@ -9,6 +9,10 @@ export class PresentationMode {
         this.isPlaying = false;
         this.currentPointIndex = 0;
         this.animationFrame = null;
+        this.currentText = '';
+        this.targetText = '';
+        this.textProgress = 0;
+        this.lastFrameTime = 0;
     }
 
     start() {
@@ -27,11 +31,12 @@ export class PresentationMode {
         this.isPlaying = false;
         this.description.style.opacity = '0';
 
-        // Reset zoom and transform
+        // Reset zoom
         const img = elements.getUploadedImage();
         if (img) {
             img.style.transform = 'scale(1)';
             img.style.transformOrigin = 'center';
+            img.style.transition = 'none'; // Reset transition
         }
 
         // Show points when stopping presentation
@@ -39,159 +44,137 @@ export class PresentationMode {
 
         if (this.animationFrame) {
             cancelAnimationFrame(this.animationFrame);
+            this.animationFrame = null;
         }
+
+        // Reset any ongoing animations
+        this.currentText = '';
+        this.targetText = '';
+        this.textProgress = 0;
     }
 
-    animateToNextPoint() {
+    async smoothAnimation(drawFrame, duration) {
+        const startTime = performance.now();
+        const frameInterval = 1000 / 60; // 60fps
+
+        return new Promise(async (resolve) => {
+            const animate = async () => {
+                if (!this.isPlaying) {
+                    resolve();
+                    return;
+                }
+
+                const currentTime = performance.now();
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                await drawFrame(progress);
+
+                if (progress < 1) {
+                    const frameTime = performance.now();
+                    const timeToNextFrame = Math.max(0, frameInterval - (frameTime - this.lastFrameTime));
+                    this.lastFrameTime = frameTime;
+                    this.animationFrame = setTimeout(animate, timeToNextFrame);
+                } else {
+                    resolve();
+                }
+            };
+
+            animate();
+        });
+    }
+
+    easeInOutCubic(x) {
+        return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+    }
+
+    async animateToNextPoint() {
         if (!this.isPlaying) return;
 
         const points = this.pointManager.getPoints();
         const point = points[this.currentPointIndex];
         const img = elements.getUploadedImage();
+        if (!img) return;
 
-        // Show description using typewriter effect
+        // Initial pause with current transform state
+        await this.smoothAnimation(async (progress) => {
+            // Don't reset transform here
+        }, 500);
+
+        // Start typewriter effect
+        this.targetText = point.description;
+        this.currentText = '';
+        this.textProgress = 0;
+
+        // Show description container
         this.description.style.opacity = '1';
-        animationUtils.typeWriter(
-            point.description,
-            this.description,
-            presentationSettings.typeWriterSpeed
-        );
 
-        // Different zoom behavior based on point type
-        if (point.type === 'area') {
-            // Calculate zoom scale based on area dimensions
-            const containerAspect = img.offsetWidth / img.offsetHeight;
-            const selectionAspect = point.area.width / point.area.height;
+        // Animate zoom with typewriter
+        await this.smoothAnimation(async (progress) => {
+            const easedProgress = this.easeInOutCubic(progress);
 
-            // Calculate scale needed to fit the selected area
-            // Add a small padding factor (0.9) to ensure the area doesn't touch the edges
-            const scaleX = (100 / point.area.width) * 0.9;
-            const scaleY = (100 / point.area.height) * 0.9;
-            const scale = Math.min(scaleX, scaleY);
+            // Update typewriter text
+            this.textProgress = Math.min(progress * 1.5, 1); // Slightly faster than zoom
+            this.currentText = this.targetText.slice(0, Math.floor(this.textProgress * this.targetText.length));
+            this.description.textContent = this.currentText;
 
-            // Center of the selected area
-            const centerX = point.area.left + (point.area.width / 2);
-            const centerY = point.area.top + (point.area.height / 2);
+            if (point.type === 'area') {
+                // For areas: zoom to exactly fit the selected area
+                const scaleX = 100 / point.area.width;
+                const scaleY = 100 / point.area.height;
+                const scale = Math.min(scaleX, scaleY);
 
-            // Animate zoom with easing
-            this.animateZoom(img, {
-                scale,
-                centerX,
-                centerY,
-                isArea: true
-            });
-        } else {
-            // Original point zoom behavior
-            this.animateZoom(img, {
-                scale: presentationSettings.zoomScale,
-                centerX: point.x,
-                centerY: point.y,
-                isArea: false
-            });
+                const currentScale = 1 + (scale - 1) * easedProgress;
+                img.style.transform = `scale(${currentScale})`;
+                img.style.transformOrigin = `${point.area.left}% ${point.area.top}%`;
+            } else {
+                // For points: center on the point with fixed zoom scale
+                const currentScale = 1 + (presentationSettings.zoomScale - 1) * easedProgress;
+                img.style.transform = `scale(${currentScale})`;
+                img.style.transformOrigin = `${point.x}% ${point.y}%`;
+            }
+
+            img.style.transition = `transform ${presentationSettings.zoomDuration}ms ease-in-out`;
+
+        }, presentationSettings.zoomDuration);
+
+        // Hold at zoomed state
+        await this.smoothAnimation(async (progress) => {
+            // Keep current transform state
+        }, presentationSettings.pointDisplayTime);
+
+        // Zoom out to full view
+        await this.smoothAnimation(async (progress) => {
+            const easedProgress = this.easeInOutCubic(progress);
+
+            // Fade out text
+            this.description.style.opacity = (1 - easedProgress).toString();
+
+            if (point.type === 'area') {
+                const scaleX = 100 / point.area.width;
+                const scaleY = 100 / point.area.height;
+                const maxScale = Math.min(scaleX, scaleY);
+                const currentScale = maxScale - (maxScale - 1) * easedProgress;
+                img.style.transform = `scale(${currentScale})`;
+            } else {
+                const currentScale = presentationSettings.zoomScale - (presentationSettings.zoomScale - 1) * easedProgress;
+                img.style.transform = `scale(${currentScale})`;
+            }
+        }, presentationSettings.zoomDuration);
+
+        // Update current point index
+        this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
+
+        if (this.currentPointIndex === 0) {
+            // Add delay before restarting from first point
+            await this.smoothAnimation(async (progress) => {
+                // Hold at unzoomed state
+            }, presentationSettings.transitionDelay);
         }
 
-        // Schedule zoom out
-        setTimeout(() => {
-            if (!this.isPlaying) return;
-
-            // Animate zoom out
-            this.animateZoomOut(img, () => {
-                if (!this.isPlaying) return;
-
-                this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
-
-                if (this.currentPointIndex === 0) {
-                    // Add delay before restarting from first point
-                    setTimeout(() => {
-                        if (this.isPlaying) this.animateToNextPoint();
-                    }, presentationSettings.transitionDelay);
-                } else {
-                    this.animateToNextPoint();
-                }
-            });
-        }, presentationSettings.pointDisplayTime);
-    }
-
-    animateZoom(img, { scale, centerX, centerY, isArea }) {
-        const startScale = parseFloat(img.style.transform?.match(/scale\((.*?)\)/)?.[1] || 1);
-        const startTime = performance.now();
-        const duration = presentationSettings.zoomDuration;
-
-        // Get the current transform origin or default to center
-        const currentOrigin = img.style.transformOrigin || 'center';
-        const [startX, startY] = currentOrigin.split(' ').map(val =>
-            parseFloat(val.replace('%', '')) || 50
-        );
-
-        const animate = (currentTime) => {
-            if (!this.isPlaying) return;
-
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-
-            // Cubic easing function
-            const eased = this.easeInOutCubic(progress);
-
-            // Interpolate scale and position
-            const currentScale = startScale + (scale - startScale) * eased;
-            const currentX = startX + (centerX - startX) * eased;
-            const currentY = startY + (centerY - startY) * eased;
-
-            // Apply transform
-            img.style.transformOrigin = `${currentX}% ${currentY}%`;
-            img.style.transform = `scale(${currentScale})`;
-
-            // Add subtle motion blur during animation
-            img.style.filter = progress < 1 ? 'blur(0.5px)' : 'none';
-
-            if (progress < 1) {
-                this.animationFrame = requestAnimationFrame(animate);
-            } else {
-                // Clear blur at the end of animation
-                img.style.filter = 'none';
-            }
-        };
-
-        this.animationFrame = requestAnimationFrame(animate);
-    }
-
-    animateZoomOut(img, callback) {
-        const startScale = parseFloat(img.style.transform?.match(/scale\((.*?)\)/)?.[1] || 1);
-        const startTime = performance.now();
-        const duration = presentationSettings.zoomDuration;
-
-        const animate = (currentTime) => {
-            if (!this.isPlaying) return;
-
-            const elapsed = currentTime - startTime;
-            const progress = Math.min(elapsed / duration, 1);
-            const eased = this.easeInOutCubic(progress);
-
-            // Interpolate back to scale(1)
-            const currentScale = startScale + (1 - startScale) * eased;
-
-            // Apply transform
-            img.style.transform = `scale(${currentScale})`;
-
-            // Add subtle motion blur during animation
-            img.style.filter = progress < 1 ? 'blur(0.5px)' : 'none';
-
-            if (progress < 1) {
-                this.animationFrame = requestAnimationFrame(animate);
-            } else {
-                // Clear blur and reset transform at the end
-                img.style.filter = 'none';
-                img.style.transformOrigin = 'center';
-                if (callback) callback();
-            }
-        };
-
-        this.animationFrame = requestAnimationFrame(animate);
-    }
-
-    easeInOutCubic(x) {
-        return x < 0.5 ?
-            4 * x * x * x :
-            1 - Math.pow(-2 * x + 2, 3) / 2;
+        // Continue to next point if still playing
+        if (this.isPlaying) {
+            this.animateToNextPoint();
+        }
     }
 }
