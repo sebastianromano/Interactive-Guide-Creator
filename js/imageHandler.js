@@ -7,7 +7,11 @@ export class ImageHandler {
     }
 
     setupEventListeners() {
-        this.uploadPrompt.addEventListener('click', () => this.fileInput.click());
+        this.uploadPrompt.addEventListener('click', (e) => {
+            e.stopPropagation(); // Prevent click from bubbling to imageContainer
+            this.fileInput.click();
+        });
+
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
         this.setupDragAndDrop();
     }
@@ -46,7 +50,13 @@ export class ImageHandler {
             const img = new Image();
             img.src = e.target.result;
             img.id = 'uploadedImage';
-            this.imageContainer.appendChild(img);
+
+            // When image is loaded, dispatch the imageLoaded event
+            img.onload = () => {
+                this.imageContainer.appendChild(img);
+                const imageLoadedEvent = new Event('imageLoaded');
+                this.imageContainer.dispatchEvent(imageLoadedEvent);
+            };
         };
         reader.readAsDataURL(file);
     }

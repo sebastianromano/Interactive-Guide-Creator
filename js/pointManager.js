@@ -4,10 +4,21 @@ export class PointManager {
         this.pointList = pointList;
         this.points = [];
         this.setupEventListeners();
+        this.imageLoaded = false;
     }
 
     setupEventListeners() {
-        this.imageContainer.addEventListener('click', (e) => this.handleImageClick(e));
+        // Listen for image load event
+        this.imageContainer.addEventListener('imageLoaded', () => {
+            this.imageLoaded = true;
+        });
+
+        this.imageContainer.addEventListener('click', (e) => {
+            // Only handle click if an image is loaded and the click target is not the upload prompt
+            if (this.imageLoaded && e.target.id !== 'uploadPrompt') {
+                this.handleImageClick(e);
+            }
+        });
     }
 
     handleImageClick(e) {
