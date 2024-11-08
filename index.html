@@ -9,18 +9,8 @@
 </head>
 
 <body>
-    <!-- SVG Icons -->
-    <svg style="display: none;" xmlns="http://www.w3.org/2000/svg">
-        <symbol id="icon-play" viewbox="0 0 24 24">
-            <path d="M8 5v14l11-7z" />
-        </symbol>
-        <symbol id="icon-stop" viewbox="0 0 24 24">
-            <path d="M6 6h12v12H6z" />
-        </symbol>
-        <symbol id="icon-record" viewbox="0 0 24 24">
-            <circle cx="12" cy="12" r="8"></circle>
-        </symbol>
-    </svg>
+    <!-- Include SVG sprite -->
+    <object id="svg-icons" type="image/svg+xml" data="icons.svg" style="display: none;"></object>
 
     <div class="container">
         <div class="left-panel">
@@ -33,12 +23,12 @@
             <div id="controls">
                 <button id="playButton" class="round-button start" aria-label="Start Presentation">
                     <svg>
-                        <use href="#icon-play" />
+                        <use href="icons.svg#icon-play" />
                     </svg>
                 </button>
                 <button id="recordButton" class="round-button record" aria-label="Record Video">
                     <svg>
-                        <use href="#icon-record" />
+                        <use href="icons.svg#icon-record" />
                     </svg>
                 </button>
             </div>

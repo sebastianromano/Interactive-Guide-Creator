@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg">
+    <symbol id="icon-play" viewbox="0 0 24 24">
+        <path d="M8 5v14l11-7z" />
+    </symbol>
+    <symbol id="icon-stop" viewbox="0 0 24 24">
+        <path d="M6 6h12v12H6z" />
+    </symbol>
+    <symbol id="icon-record" viewbox="0 0 24 24">
+        <circle cx="12" cy="12" r="8"></circle>
+    </symbol>
+</svg>
