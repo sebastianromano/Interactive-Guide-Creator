@@ -5,6 +5,8 @@ export class PointManager {
         this.points = [];
         this.setupEventListeners();
         this.imageLoaded = false;
+        this.draggedPoint = null;
+        this.isDragging = false;
     }
 
     setupEventListeners() {
@@ -14,11 +16,20 @@ export class PointManager {
         });
 
         this.imageContainer.addEventListener('click', (e) => {
-            // Only handle click if an image is loaded and the click target is not the upload prompt
-            if (this.imageLoaded && e.target.id !== 'uploadPrompt') {
+            // Only handle click if we're not dragging and the click target isn't a point or the upload prompt
+            if (this.imageLoaded &&
+                !this.isDragging &&
+                e.target.id !== 'uploadPrompt' &&
+                !e.target.classList.contains('point')) {
                 this.handleImageClick(e);
             }
         });
+
+        // Add drag event listeners to the container
+        document.addEventListener('mousemove', (e) => this.handleDrag(e));
+        document.addEventListener('mouseup', (e) => this.stopDrag(e));
+        // We'll keep mouseleave on the container to handle edge cases
+        this.imageContainer.addEventListener('mouseleave', (e) => this.stopDrag(e));
     }
 
     handleImageClick(e) {
@@ -36,6 +47,15 @@ export class PointManager {
         point.className = 'point';
         point.style.left = x + '%';
         point.style.top = y + '%';
+        point.style.cursor = 'move';
+
+        // Add mousedown event for drag start
+        point.addEventListener('mousedown', (e) => {
+            e.preventDefault(); // Prevent text selection during drag
+            e.stopPropagation(); // Prevent creating new point
+            this.startDrag(point, e);
+        });
+
         this.imageContainer.appendChild(point);
 
         return {
@@ -44,6 +64,55 @@ export class PointManager {
             element: point,
             description: ''
         };
+    }
+
+    startDrag(pointElement, e) {
+        this.isDragging = true;
+        this.draggedPoint = this.points.find(p => p.element === pointElement);
+
+        // Store the initial mouse offset relative to the point
+        const rect = pointElement.getBoundingClientRect();
+        this.dragOffset = {
+            x: e.clientX - rect.left,
+            y: e.clientY - rect.top
+        };
+
+        pointElement.style.zIndex = '1000';
+        pointElement.style.opacity = '0.8';
+    }
+
+    handleDrag(e) {
+        if (!this.draggedPoint || !this.isDragging) return;
+
+        e.preventDefault();
+
+        const rect = this.imageContainer.getBoundingClientRect();
+        let x = ((e.clientX - rect.left) / this.imageContainer.offsetWidth) * 100;
+        let y = ((e.clientY - rect.top) / this.imageContainer.offsetHeight) * 100;
+
+        // Clamp values between 0 and 100
+        x = Math.max(0, Math.min(100, x));
+        y = Math.max(0, Math.min(100, y));
+
+        // Update point position
+        this.draggedPoint.x = x;
+        this.draggedPoint.y = y;
+        this.draggedPoint.element.style.left = x + '%';
+        this.draggedPoint.element.style.top = y + '%';
+    }
+
+    stopDrag(e) {
+        if (this.draggedPoint) {
+            this.draggedPoint.element.style.zIndex = '';
+            this.draggedPoint.element.style.opacity = '';
+            this.draggedPoint = null;
+
+            // Set a small timeout before allowing new points to be created
+            // This prevents accidental point creation when releasing a drag
+            setTimeout(() => {
+                this.isDragging = false;
+            }, 50);
+        }
     }
 
     updatePointList() {
