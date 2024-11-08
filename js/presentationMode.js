@@ -8,11 +8,7 @@ export class PresentationMode {
         this.description = description;
         this.isPlaying = false;
         this.currentPointIndex = 0;
-        this.animationFrame = null;
-        this.currentText = '';
-        this.targetText = '';
-        this.textProgress = 0;
-        this.lastFrameTime = 0;
+        this.currentTransformOrigin = null;
     }
 
     start() {
@@ -21,74 +17,27 @@ export class PresentationMode {
 
         this.isPlaying = true;
         this.currentPointIndex = 0;
-
-        // Hide points when starting presentation
         this.pointManager.setPointsVisibility(false);
-        this.animateToNextPoint();
+        this.processNextPoint();
     }
 
     stop() {
         this.isPlaying = false;
         this.description.style.opacity = '0';
 
-        // Reset zoom
         const img = elements.getUploadedImage();
         if (img) {
+            img.style.transition = 'none';
             img.style.transform = 'scale(1)';
             img.style.transformOrigin = 'center';
-            img.style.transition = 'none'; // Reset transition
+            void img.offsetWidth;
         }
 
-        // Show points when stopping presentation
         this.pointManager.setPointsVisibility(true);
-
-        if (this.animationFrame) {
-            cancelAnimationFrame(this.animationFrame);
-            this.animationFrame = null;
-        }
-
-        // Reset any ongoing animations
-        this.currentText = '';
-        this.targetText = '';
-        this.textProgress = 0;
+        this.currentTransformOrigin = null;
     }
 
-    async smoothAnimation(drawFrame, duration) {
-        const startTime = performance.now();
-        const frameInterval = 1000 / 60; // 60fps
-
-        return new Promise(async (resolve) => {
-            const animate = async () => {
-                if (!this.isPlaying) {
-                    resolve();
-                    return;
-                }
-
-                const currentTime = performance.now();
-                const elapsed = currentTime - startTime;
-                const progress = Math.min(elapsed / duration, 1);
-
-                await drawFrame(progress);
-
-                if (progress < 1) {
-                    const frameTime = performance.now();
-                    const timeToNextFrame = Math.max(0, frameInterval - (frameTime - this.lastFrameTime));
-                    this.lastFrameTime = frameTime;
-                    this.animationFrame = setTimeout(animate, timeToNextFrame);
-                } else {
-                    resolve();
-                }
-            };
-
-            animate();
-        });
-    }
-
-    easeInOutCubic(x) {
-        return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
-    }
-
-    async animateToNextPoint() {
+    processNextPoint() {
         if (!this.isPlaying) return;
 
         const points = this.pointManager.getPoints();
@@ -96,85 +45,111 @@ export class PresentationMode {
         const img = elements.getUploadedImage();
         if (!img) return;
 
-        // Initial pause with current transform state
-        await this.smoothAnimation(async (progress) => {
-            // Don't reset transform here
-        }, 500);
+        // Set up transition duration
+        img.style.transition = `transform ${presentationSettings.zoomDuration}ms ease-in-out`;
 
-        // Start typewriter effect
-        this.targetText = point.description;
-        this.currentText = '';
-        this.textProgress = 0;
+        // Get and store transform origin for this point
+        this.currentTransformOrigin = this.getTransformOrigin(point);
 
-        // Show description container
-        this.description.style.opacity = '1';
+        // Phase 1: Zoom in
+        this.zoomToPoint(point, img).then(() => {
+            if (!this.isPlaying) return;
 
-        // Animate zoom with typewriter
-        await this.smoothAnimation(async (progress) => {
-            const easedProgress = this.easeInOutCubic(progress);
+            // Show description
+            this.description.style.opacity = '1';
+            animationUtils.typeWriter(point.description, this.description, presentationSettings.typeWriterSpeed);
 
-            // Update typewriter text
-            this.textProgress = Math.min(progress * 1.5, 1); // Slightly faster than zoom
-            this.currentText = this.targetText.slice(0, Math.floor(this.textProgress * this.targetText.length));
-            this.description.textContent = this.currentText;
+            // Phase 2: Hold at zoomed position
+            setTimeout(() => {
+                if (!this.isPlaying) return;
 
-            if (point.type === 'area') {
-                // For areas: zoom to exactly fit the selected area
-                const scaleX = 100 / point.area.width;
-                const scaleY = 100 / point.area.height;
-                const scale = Math.min(scaleX, scaleY);
+                // Phase 3: Zoom out (maintaining transform origin)
+                this.zoomOut(img, point).then(() => {
+                    if (!this.isPlaying) return;
 
-                const currentScale = 1 + (scale - 1) * easedProgress;
-                img.style.transform = `scale(${currentScale})`;
-                img.style.transformOrigin = `${point.area.left}% ${point.area.top}%`;
-            } else {
-                // For points: center on the point with fixed zoom scale
-                const currentScale = 1 + (presentationSettings.zoomScale - 1) * easedProgress;
-                img.style.transform = `scale(${currentScale})`;
-                img.style.transformOrigin = `${point.x}% ${point.y}%`;
-            }
+                    // Hide description
+                    this.description.style.opacity = '0';
 
-            img.style.transition = `transform ${presentationSettings.zoomDuration}ms ease-in-out`;
+                    // Move to next point
+                    this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
 
-        }, presentationSettings.zoomDuration);
+                    // If we're back at the start, add a delay
+                    const delay = this.currentPointIndex === 0 ?
+                        presentationSettings.transitionDelay :
+                        presentationSettings.zoomDuration;
 
-        // Hold at zoomed state
-        await this.smoothAnimation(async (progress) => {
-            // Keep current transform state
-        }, presentationSettings.pointDisplayTime);
+                    setTimeout(() => {
+                        if (this.isPlaying) {
+                            this.processNextPoint();
+                        }
+                    }, delay);
+                });
+            }, presentationSettings.pointDisplayTime);
+        });
+    }
 
-        // Zoom out to full view
-        await this.smoothAnimation(async (progress) => {
-            const easedProgress = this.easeInOutCubic(progress);
-
-            // Fade out text
-            this.description.style.opacity = (1 - easedProgress).toString();
-
-            if (point.type === 'area') {
-                const scaleX = 100 / point.area.width;
-                const scaleY = 100 / point.area.height;
-                const maxScale = Math.min(scaleX, scaleY);
-                const currentScale = maxScale - (maxScale - 1) * easedProgress;
-                img.style.transform = `scale(${currentScale})`;
-            } else {
-                const currentScale = presentationSettings.zoomScale - (presentationSettings.zoomScale - 1) * easedProgress;
-                img.style.transform = `scale(${currentScale})`;
-            }
-        }, presentationSettings.zoomDuration);
-
-        // Update current point index
-        this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
-
-        if (this.currentPointIndex === 0) {
-            // Add delay before restarting from first point
-            await this.smoothAnimation(async (progress) => {
-                // Hold at unzoomed state
-            }, presentationSettings.transitionDelay);
+    getTransformOrigin(point) {
+        if (point.type === 'area') {
+            // Calculate the center of the area
+            const centerX = point.area.left + (point.area.width / 2);
+            const centerY = point.area.top + (point.area.height / 2);
+            return `${centerX}% ${centerY}%`;
+        } else {
+            return `${point.x}% ${point.y}%`;
         }
+    }
 
-        // Continue to next point if still playing
-        if (this.isPlaying) {
-            this.animateToNextPoint();
+    getZoomScale(point, img) {
+        if (point.type === 'area') {
+            // Calculate scales based on both dimensions
+            const scaleX = 100 / point.area.width;
+            const scaleY = 100 / point.area.height;
+
+            // Use the smaller scale to ensure the longest dimension fits in view
+            return Math.min(scaleX, scaleY);
+        } else {
+            return presentationSettings.zoomScale;
         }
+    }
+
+    zoomToPoint(point, img) {
+        return new Promise((resolve) => {
+            const handleTransitionEnd = (e) => {
+                if (e.propertyName === 'transform') {
+                    img.removeEventListener('transitionend', handleTransitionEnd);
+                    resolve();
+                }
+            };
+
+            img.addEventListener('transitionend', handleTransitionEnd);
+
+            void img.offsetWidth;
+
+            // Set transform origin first
+            img.style.transformOrigin = this.currentTransformOrigin;
+
+            // Calculate and apply the zoom scale
+            const scale = this.getZoomScale(point, img);
+            img.style.transform = `scale(${scale})`;
+        });
+    }
+
+    zoomOut(img, point) {
+        return new Promise((resolve) => {
+            const handleTransitionEnd = (e) => {
+                if (e.propertyName === 'transform') {
+                    img.removeEventListener('transitionend', handleTransitionEnd);
+                    resolve();
+                }
+            };
+
+            img.addEventListener('transitionend', handleTransitionEnd);
+
+            void img.offsetWidth;
+
+            // Maintain the same transform origin while zooming out
+            img.style.transformOrigin = this.currentTransformOrigin;
+            img.style.transform = 'scale(1)';
+        });
     }
 }
