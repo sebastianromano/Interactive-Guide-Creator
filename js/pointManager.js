@@ -13,12 +13,12 @@ export class PointManager {
         // Listen for image load event
         this.imageContainer.addEventListener('imageLoaded', () => {
             this.imageLoaded = true;
+            this.clear(); // Clear any existing points when new image is loaded
         });
 
         this.imageContainer.addEventListener('click', (e) => {
             // Only handle click if we're not dragging and the click target isn't a point or the upload prompt
-            if (this.imageLoaded &&
-                !this.isDragging &&
+            if (!this.isDragging &&
                 e.target.id !== 'uploadPrompt' &&
                 !e.target.classList.contains('point')) {
                 this.handleImageClick(e);
@@ -33,6 +33,12 @@ export class PointManager {
     }
 
     handleImageClick(e) {
+        // Check if image exists and is loaded
+        const uploadedImage = document.getElementById('uploadedImage');
+        if (!uploadedImage || !this.imageLoaded || uploadedImage.style.display === 'none') {
+            return; // Don't create points if no image is loaded
+        }
+
         const rect = this.imageContainer.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / this.imageContainer.offsetWidth) * 100;
         const y = ((e.clientY - rect.top) / this.imageContainer.offsetHeight) * 100;
