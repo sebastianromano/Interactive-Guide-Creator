@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide Creator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+
+        .container {
+            display: flex;
+            gap: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .left-panel {
+            flex: 1;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .right-panel {
+            width: 300px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .mode-selector {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .mode-btn {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        .mode-btn.active {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        .mode-btn:not(.active) {
+            background-color: #ddd;
+        }
+
+        .image-container {
+            position: relative;
+            overflow: hidden;
+            margin: 0 auto;
+            background-color: #eee;
+            min-height: 300px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #uploadedImage {
+            max-width: 100%;
+            height: auto;
+        }
+
+        .point {
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background-color: rgba(255, 0, 0, 0.5);
+            border: 2px solid red;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            cursor: pointer;
+        }
+
+        .point-list {
+            margin-top: 20px;
+        }
+
+        .point-item {
+            margin-bottom: 10px;
+            padding: 10px;
+            background-color: #f5f5f5;
+            border-radius: 4px;
+        }
+
+        .point-item textarea {
+            width: 100%;
+            margin-top: 5px;
+            padding: 5px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            resize: vertical;
+        }
+
+        #description {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 8px;
+            text-align: center;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+
+        #uploadPrompt {
+            text-align: center;
+            padding: 40px;
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            cursor: pointer;
+        }
+
+        #controls {
+            margin-top: 20px;
+            text-align: center;
+        }
+
+        .control-btn {
+            padding: 10px 20px;
+            margin: 0 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 14px;
+        }
+
+        .control-btn:disabled {
+            background-color: #ddd;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="mode-selector">
+        <button class="mode-btn active" data-mode="edit">Edit Mode</button>
+        <button class="mode-btn" data-mode="view">View Mode</button>
+    </div>
+
+    <div class="container">
+        <div class="left-panel">
+            <div class="image-container" id="imageContainer">
+                <div id="uploadPrompt">
+                    Click or drag an image here to upload
+                    <input type="file" id="fileInput" style="display: none" accept="image/*">
+                </div>
+            </div>
+            <div id="controls">
+                <button id="startButton" class="control-btn" disabled>Start Presentation</button>
+                <button id="stopButton" class="control-btn" disabled>Stop</button>
+            </div>
+        </div>
+        <div class="right-panel">
+            <h3>Points of Interest</h3>
+            <div class="point-list" id="pointList"></div>
+        </div>
+    </div>
+    <div id="description"></div>
+
+    <script>
+        let currentMode = 'edit';
+        let points = [];
+        let isPlaying = false;
+        let currentPointIndex = 0;
+        let animationFrame;
+
+        const imageContainer = document.getElementById('imageContainer');
+        const uploadPrompt = document.getElementById('uploadPrompt');
+        const fileInput = document.getElementById('fileInput');
+        const pointList = document.getElementById('pointList');
+        const description = document.getElementById('description');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+
+        // Mode selection
+        document.querySelectorAll('.mode-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+                if (currentMode === 'view') {
+                    startButton.disabled = false;
+                } else {
+                    stopPresentation();
+                    startButton.disabled = true;
+                }
+            });
+        });
+
+        // File upload handling
+        uploadPrompt.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', handleFileSelect);
+
+        imageContainer.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadPrompt.style.borderColor = '#4CAF50';
+        });
+
+        imageContainer.addEventListener('dragleave', () => {
+            uploadPrompt.style.borderColor = '#ccc';
+        });
+
+        imageContainer.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadPrompt.style.borderColor = '#ccc';
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+
+        function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        }
+
+        function handleFile(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                uploadPrompt.style.display = 'none';
+                const img = new Image();
+                img.src = e.target.result;
+                img.id = 'uploadedImage';
+                imageContainer.appendChild(img);
+
+                // Enable click handling for points
+                imageContainer.addEventListener('click', handleImageClick);
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function handleImageClick(e) {
+            if (currentMode !== 'edit') return;
+
+            const rect = imageContainer.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / imageContainer.offsetWidth) * 100;
+            const y = ((e.clientY - rect.top) / imageContainer.offsetHeight) * 100;
+
+            // Create point marker
+            const point = document.createElement('div');
+            point.className = 'point';
+            point.style.left = x + '%';
+            point.style.top = y + '%';
+            imageContainer.appendChild(point);
+
+            // Create point entry in list
+            const pointEntry = {
+                x,
+                y,
+                element: point,
+                description: ''
+            };
+            points.push(pointEntry);
+
+            updatePointList();
+        }
+
+        function updatePointList() {
+            pointList.innerHTML = '';
+            points.forEach((point, index) => {
+                const item = document.createElement('div');
+                item.className = 'point-item';
+
+                const textarea = document.createElement('textarea');
+                textarea.value = point.description;
+                textarea.placeholder = `Description for point ${index + 1}`;
+                textarea.rows = 3;
+                textarea.addEventListener('input', (e) => {
+                    point.description = e.target.value;
+                });
+
+                item.appendChild(textarea);
+                pointList.appendChild(item);
+            });
+        }
+
+        startButton.addEventListener('click', startPresentation);
+        stopButton.addEventListener('click', stopPresentation);
+
+        function startPresentation() {
+            if (points.length === 0) return;
+
+            isPlaying = true;
+            startButton.disabled = true;
+            stopButton.disabled = false;
+            currentPointIndex = 0;
+
+            animateToNextPoint();
+        }
+
+        function stopPresentation() {
+            isPlaying = false;
+            startButton.disabled = false;
+            stopButton.disabled = true;
+            description.style.opacity = '0';
+
+            // Reset zoom
+            const img = document.getElementById('uploadedImage');
+            img.style.transform = 'scale(1)';
+            img.style.transformOrigin = 'center';
+
+            cancelAnimationFrame(animationFrame);
+        }
+
+        function animateToNextPoint() {
+            if (!isPlaying) return;
+
+            const point = points[currentPointIndex];
+            const img = document.getElementById('uploadedImage');
+
+            // Show description with typewriter effect
+            description.style.opacity = '1';
+            typeWriter(point.description, description);
+
+            // Animate zoom
+            img.style.transform = 'scale(2)';
+            img.style.transformOrigin = `${point.x}% ${point.y}%`;
+            img.style.transition = 'transform 1s ease-in-out';
+
+            // Wait and zoom out
+            setTimeout(() => {
+                if (!isPlaying) return;
+
+                img.style.transform = 'scale(1)';
+
+                // Move to next point
+                setTimeout(() => {
+                    if (!isPlaying) return;
+
+                    currentPointIndex = (currentPointIndex + 1) % points.length;
+                    if (currentPointIndex === 0) {
+                        // Optional pause at the end of the cycle
+                        setTimeout(() => {
+                            if (isPlaying) animateToNextPoint();
+                        }, 1000);
+                    } else {
+                        animateToNextPoint();
+                    }
+                }, 3000); // Wait before zooming out
+            }, 4000); // Time to show zoomed point
+        }
+
+        function typeWriter(text, element) {
+            let i = 0;
+            element.textContent = '';
+
+            function type() {
+                if (i < text.length && isPlaying) {
+                    element.textContent += text.charAt(i);
+                    i++;
+                    setTimeout(type, 50);
+                }
+            }
+
+            type();
+        }
+    </script>
+</body>
+
+</html>
