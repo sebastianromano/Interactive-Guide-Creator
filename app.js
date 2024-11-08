@@ -198,3 +198,250 @@ function typeWriter(text, element) {
 
     type();
 }
+
+// Video recording functionality
+let mediaRecorder;
+let recordedChunks = [];
+let currentScale = 1;
+let currentOriginX = 50;
+let currentOriginY = 50;
+
+// Create a canvas element for recording
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+
+// Quality settings panel
+const qualityPanel = document.createElement('div');
+qualityPanel.className = 'quality-settings';
+qualityPanel.innerHTML = `
+    <div style="background: white; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+        <h3 style="margin-bottom: 10px;">Video Quality Settings</h3>
+        <select id="qualitySelect" class="quality-select" style="width: 100%; padding: 8px; margin-bottom: 10px; border-radius: 4px; border: 1px solid #ddd;">
+            <option value="1080">1080p (1920x1080)</option>
+            <option value="1440">1440p (2560x1440)</option>
+            <option value="2160">4K (3840x2160)</option>
+        </select>
+        <div style="font-size: 12px; color: #666;">Higher quality will result in larger file sizes</div>
+    </div>
+`;
+
+// Add quality settings to right panel
+document.querySelector('.right-panel').insertBefore(qualityPanel, document.querySelector('#pointList'));
+
+function getQualitySettings() {
+    const quality = document.getElementById('qualitySelect').value;
+    switch (quality) {
+        case '2160':
+            return { width: 3840, height: 2160 };
+        case '1440':
+            return { width: 2560, height: 1440 };
+        default:
+            return { width: 1920, height: 1080 };
+    }
+}
+
+function setupRecording() {
+    const quality = getQualitySettings();
+    canvas.width = quality.width;
+    canvas.height = quality.height;
+
+    // Setup MediaRecorder with high bitrate for better quality
+    const stream = canvas.captureStream(60); // Increased to 60 FPS
+    mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp9',
+        videoBitsPerSecond: 8000000 // 8 Mbps for better quality
+    });
+
+    mediaRecorder.ondataavailable = handleDataAvailable;
+    mediaRecorder.onstop = handleStop;
+}
+
+function handleDataAvailable(event) {
+    if (event.data.size > 0) {
+        recordedChunks.push(event.data);
+    }
+}
+
+function handleStop() {
+    const blob = new Blob(recordedChunks, {
+        type: 'video/webm'
+    });
+    recordedChunks = [];
+
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    document.body.appendChild(a);
+    a.style.display = 'none';
+    a.href = url;
+    a.download = 'presentation.webm';
+    a.click();
+
+    setTimeout(() => {
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+    }, 100);
+}
+
+// Animation timing function
+function easeInOutQuad(t) {
+    return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+// Animate zoom for recording
+async function animateZoom(startScale, endScale, startX, endX, startY, endY, duration) {
+    const startTime = Date.now();
+
+    return new Promise(resolve => {
+        function update() {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeProgress = easeInOutQuad(progress);
+
+            currentScale = startScale + (endScale - startScale) * easeProgress;
+            currentOriginX = startX + (endX - startX) * easeProgress;
+            currentOriginY = startY + (endY - startY) * easeProgress;
+
+            if (progress < 1) {
+                requestAnimationFrame(update);
+            } else {
+                resolve();
+            }
+        }
+
+        update();
+    });
+}
+
+// Modified drawing function with zoom support
+function drawFrame() {
+    if (!isPlaying) return;
+
+    const point = points[currentPointIndex];
+    const img = document.getElementById('uploadedImage');
+    const quality = getQualitySettings();
+
+    // Clear canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    // Save the current context state
+    ctx.save();
+
+    // Calculate scaled dimensions and positions
+    const scaledWidth = canvas.width * currentScale;
+    const scaledHeight = canvas.height * currentScale;
+    const translateX = canvas.width * (currentOriginX / 100) - (scaledWidth * (currentOriginX / 100));
+    const translateY = canvas.height * (currentOriginY / 100) - (scaledHeight * (currentOriginY / 100));
+
+    // Apply transforms
+    ctx.translate(translateX, translateY);
+    ctx.scale(currentScale, currentScale);
+
+    // Draw image
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+    // Draw points
+    points.forEach((p, index) => {
+        const pointX = (p.x / 100) * canvas.width;
+        const pointY = (p.y / 100) * canvas.height;
+
+        ctx.beginPath();
+        ctx.arc(pointX, pointY, 10, 0, 2 * Math.PI);
+        ctx.fillStyle = index === currentPointIndex ? 'rgba(255,0,0,0.5)' : 'rgba(200,200,200,0.5)';
+        ctx.fill();
+        ctx.strokeStyle = 'red';
+        ctx.stroke();
+    });
+
+    // Restore the context state
+    ctx.restore();
+
+    // Draw description
+    if (point.description) {
+        const fontSize = Math.floor(quality.height / 40);
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0, canvas.height - fontSize * 4, canvas.width, fontSize * 4);
+        ctx.fillStyle = 'white';
+        ctx.font = `${fontSize}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText(point.description, canvas.width / 2, canvas.height - fontSize * 2);
+    }
+
+    requestAnimationFrame(drawFrame);
+}
+
+// Modified animation sequence
+async function animateToNextPoint() {
+    if (!isPlaying) return;
+
+    const point = points[currentPointIndex];
+
+    // Show description with typewriter effect
+    description.style.opacity = '1';
+    typeWriter(point.description, description);
+
+    // Zoom in
+    await animateZoom(1, 2, 50, point.x, 50, point.y, 1000);
+
+    // Wait at zoomed state
+    await new Promise(resolve => setTimeout(resolve, 4000));
+
+    // Zoom out
+    if (isPlaying) {
+        await animateZoom(2, 1, point.x, 50, point.y, 50, 1000);
+
+        // Move to next point
+        if (isPlaying) {
+            currentPointIndex = (currentPointIndex + 1) % points.length;
+            if (currentPointIndex === 0) {
+                // Optional pause at the end of the cycle
+                setTimeout(() => {
+                    if (isPlaying) animateToNextPoint();
+                }, 1000);
+            } else {
+                animateToNextPoint();
+            }
+        }
+    }
+}
+
+// Add record button to controls
+const recordButton = document.createElement('button');
+recordButton.className = 'control-btn';
+recordButton.textContent = 'Record Video';
+recordButton.onclick = () => {
+    if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+        recordButton.textContent = 'Stop Recording';
+        startRecording();
+        startPresentation();
+    } else {
+        recordButton.textContent = 'Record Video';
+        stopRecording();
+        stopPresentation();
+    }
+};
+
+document.getElementById('controls').appendChild(recordButton);
+
+function startRecording() {
+    if (!mediaRecorder) {
+        setupRecording();
+    }
+    recordedChunks = [];
+    mediaRecorder.start();
+}
+
+function stopRecording() {
+    if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+        mediaRecorder.stop();
+    }
+}
+
+// Modify existing startPresentation function
+const originalStartPresentation = startPresentation;
+startPresentation = function() {
+    currentScale = 1;
+    currentOriginX = 50;
+    currentOriginY = 50;
+    originalStartPresentation();
+    drawFrame();
+};
