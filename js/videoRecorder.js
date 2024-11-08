@@ -18,7 +18,12 @@ export class VideoRecorder {
 
         // Create and add settings panel
         this.settingsPanel = this.createSettingsPanel();
-        this.recordButton = this.createRecordButton();
+
+        // Get the existing record button
+        this.recordButton = document.getElementById('recordButton');
+        if (this.recordButton) {
+            this.recordButton.addEventListener('click', () => this.toggleRecording());
+        }
 
         // Initialize UI
         this.initializeUI();
@@ -27,7 +32,6 @@ export class VideoRecorder {
     initializeUI() {
         // Add settings panel to parent
         this.parentElement.appendChild(this.settingsPanel);
-        document.getElementById('controls').appendChild(this.recordButton);
     }
 
     createSettingsPanel() {
@@ -65,45 +69,8 @@ export class VideoRecorder {
             </div>
         `;
 
-        this.addSettingsStyles();
         this.setupSettingsListeners(panel);
-
         return panel;
-    }
-
-    addSettingsStyles() {
-        const style = document.createElement('style');
-        style.textContent = `
-            .settings-panel {
-                background: white;
-                padding: 15px;
-                margin-top: 15px;
-                border-radius: 8px;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-            .settings-group {
-                margin-bottom: 10px;
-            }
-            .settings-group label {
-                display: block;
-                margin-bottom: 5px;
-                font-weight: bold;
-            }
-            .settings-select, .settings-group input {
-                width: 100%;
-                padding: 8px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                margin-bottom: 5px;
-            }
-            #customResolution {
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 10px;
-                margin-top: 5px;
-            }
-        `;
-        document.head.appendChild(style);
     }
 
     setupSettingsListeners(panel) {
@@ -145,34 +112,6 @@ export class VideoRecorder {
         });
     }
 
-    createRecordButton() {
-        const button = document.createElement('button');
-        button.className = 'round-button record';
-        button.setAttribute('aria-label', 'Record Video');
-        button.innerHTML = '<svg><use href="#icon-record"/></svg>';
-        button.onclick = () => this.toggleRecording();
-        return button;
-    }
-
-    setupRecording() {
-        this.canvas.width = this.settings.width;
-        this.canvas.height = this.settings.height;
-
-        const stream = this.canvas.captureStream(this.settings.fps);
-        this.mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=vp9',
-            videoBitsPerSecond: this.settings.bitrate
-        });
-
-        this.mediaRecorder.ondataavailable = (event) => {
-            if (event.data.size > 0) {
-                this.recordedChunks.push(event.data);
-            }
-        };
-
-        this.mediaRecorder.onstop = () => this.handleStop();
-    }
-
     toggleRecording() {
         if (!this.isRecording) {
             this.startRecording();
@@ -192,7 +131,6 @@ export class VideoRecorder {
         this.recordedChunks = [];
         this.mediaRecorder.start();
         this.isRecording = true;
-        this.recordButton.textContent = 'Stop Recording';
 
         // Start presentation and drawing
         window.startPresentation();
@@ -202,9 +140,27 @@ export class VideoRecorder {
         if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
             this.mediaRecorder.stop();
             this.isRecording = false;
-            this.recordButton.textContent = 'Record Video';
             window.stopPresentation();
         }
+    }
+
+    setupRecording() {
+        this.canvas.width = this.settings.width;
+        this.canvas.height = this.settings.height;
+
+        const stream = this.canvas.captureStream(this.settings.fps);
+        this.mediaRecorder = new MediaRecorder(stream, {
+            mimeType: 'video/webm;codecs=vp9',
+            videoBitsPerSecond: this.settings.bitrate
+        });
+
+        this.mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                this.recordedChunks.push(event.data);
+            }
+        };
+
+        this.mediaRecorder.onstop = () => this.handleStop();
     }
 
     handleStop() {

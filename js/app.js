@@ -16,7 +16,7 @@ class App {
         this.fileInput = document.getElementById('fileInput');
         this.pointList = document.getElementById('pointList');
         this.description = document.getElementById('description');
-        this.toggleButton = document.getElementById('toggleButton');
+        this.playButton = document.getElementById('playButton');
         this.rightPanel = document.querySelector('.right-panel');
 
         // Initialize components
@@ -31,39 +31,26 @@ class App {
 
     setupEventListeners() {
         // Presentation controls
-        toggleButton.addEventListener('click', () => {
+        this.playButton.addEventListener('click', () => {
             if (!this.isPresenting) {
-                toggleButton.classList.remove('start');
-                toggleButton.classList.add('stop');
-                toggleButton.setAttribute('aria-label', 'Stop Presentation');
-                toggleButton.querySelector('svg use').setAttribute('href', '#icon-stop');
+                this.playButton.classList.remove('start');
+                this.playButton.classList.add('stop');
+                this.playButton.setAttribute('aria-label', 'Stop Presentation');
+                this.playButton.querySelector('svg use').setAttribute('href', '#icon-stop');
                 this.startPresentation();
             } else {
-                toggleButton.classList.remove('stop');
-                toggleButton.classList.add('start');
-                toggleButton.setAttribute('aria-label', 'Start Presentation');
-                toggleButton.querySelector('svg use').setAttribute('href', '#icon-play');
+                this.playButton.classList.remove('stop');
+                this.playButton.classList.add('start');
+                this.playButton.setAttribute('aria-label', 'Start Presentation');
+                this.playButton.querySelector('svg use').setAttribute('href', '#icon-play');
                 this.stopPresentation();
             }
         });
     }
 
-    togglePresentation() {
-        if (!this.isPresenting) {
-            this.startPresentation();
-        } else {
-            this.stopPresentation();
-        }
-    }
-
     startPresentation() {
         this.presentationMode.start();
         this.isPresenting = true;
-
-        this.toggleButton.classList.remove('start');
-        this.toggleButton.classList.add('stop');
-        this.toggleButton.setAttribute('aria-label', 'Stop Presentation');
-        this.toggleButton.querySelector('svg use').setAttribute('href', '#icon-stop');
 
         if (this.videoRecorder.isRecording) {
             const img = document.getElementById('uploadedImage');
@@ -74,11 +61,6 @@ class App {
     stopPresentation() {
         this.presentationMode.stop();
         this.isPresenting = false;
-
-        this.toggleButton.classList.remove('stop');
-        this.toggleButton.classList.add('start');
-        this.toggleButton.setAttribute('aria-label', 'Start Presentation');
-        this.toggleButton.querySelector('svg use').setAttribute('href', '#icon-play');
     }
 }
 
