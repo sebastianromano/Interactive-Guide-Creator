@@ -16,25 +16,29 @@
 
     <div class="container">
         <div class="left-panel">
-            <div class="image-container" id="imageContainer">
+            <div id="imageContainer" class="image-container">
                 <div id="uploadPrompt">
                     Click or drag an image here to upload
-                    <input type="file" id="fileInput" style="display: none" accept="image/*">
                 </div>
             </div>
+            <input type="file" id="fileInput" accept="image/*" style="display: none;">
             <div id="controls">
                 <button id="startButton" class="control-btn" disabled>Start Presentation</button>
                 <button id="stopButton" class="control-btn" disabled>Stop</button>
             </div>
         </div>
+
         <div class="right-panel">
             <h3>Points of Interest</h3>
-            <div class="point-list" id="pointList"></div>
+            <div id="pointList" class="point-list"></div>
         </div>
     </div>
+
     <div id="description"></div>
 
-    <script src="app.js"></script>
+    <!-- Change these script tags to use type="module" -->
+    <script type="module" src="app.js"></script>
+
 </body>
 
 </html>
