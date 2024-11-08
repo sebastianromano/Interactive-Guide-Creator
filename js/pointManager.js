@@ -21,7 +21,8 @@ export class PointManager {
             // Only handle click if we're not dragging and the click target isn't a point or the upload prompt
             if (!this.isDragging &&
                 e.target.id !== 'uploadPrompt' &&
-                !e.target.classList.contains('point')) {
+                !e.target.classList.contains('point') &&
+                !e.target.classList.contains('point-number')) {
                 this.handleImageClick(e);
             }
         });
@@ -50,25 +51,40 @@ export class PointManager {
     }
 
     createPointMarker(x, y) {
+        const pointContainer = document.createElement('div');
+        pointContainer.className = 'point-container';
+        pointContainer.style.position = 'absolute';
+        pointContainer.style.left = x + '%';
+        pointContainer.style.top = y + '%';
+        pointContainer.style.transform = 'translate(-50%, -50%)';
+        pointContainer.style.cursor = 'move';
+
+        // Create the point circle
         const point = document.createElement('div');
         point.className = 'point';
-        point.style.left = x + '%';
-        point.style.top = y + '%';
-        point.style.cursor = 'move';
+
+        // Create the number label
+        const number = document.createElement('div');
+        number.className = 'point-number';
+        number.textContent = (this.points.length + 1).toString();
+
+        // Add point and number to container
+        pointContainer.appendChild(point);
+        pointContainer.appendChild(number);
 
         // Add mousedown event for drag start
-        point.addEventListener('mousedown', (e) => {
+        pointContainer.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent text selection during drag
             e.stopPropagation(); // Prevent creating new point
-            this.startDrag(point, e);
+            this.startDrag(pointContainer, e);
         });
 
-        this.imageContainer.appendChild(point);
+        this.imageContainer.appendChild(pointContainer);
 
         return {
             x,
             y,
-            element: point,
+            element: pointContainer,
             description: ''
         };
     }
@@ -128,6 +144,10 @@ export class PointManager {
             const item = document.createElement('div');
             item.className = 'point-item';
 
+            const header = document.createElement('div');
+            header.className = 'point-header';
+            header.textContent = `Point ${index + 1}`;
+
             const textarea = document.createElement('textarea');
             textarea.value = point.description;
             textarea.placeholder = `Description for point ${index + 1}`;
@@ -136,6 +156,7 @@ export class PointManager {
                 point.description = e.target.value;
             });
 
+            item.appendChild(header);
             item.appendChild(textarea);
             this.pointList.appendChild(item);
         });
