@@ -1,4 +1,3 @@
-// videoRecorder.js
 export class VideoRecorder {
     constructor(parentElement) {
         this.mediaRecorder = null;
