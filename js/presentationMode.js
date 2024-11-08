@@ -1,3 +1,7 @@
+import { elements } from './domElements.js';
+import { presentationSettings } from './settings.js';
+import { animationUtils } from './utils.js';
+
 export class PresentationMode {
     constructor(pointManager, description) {
         this.pointManager = pointManager;
@@ -13,6 +17,7 @@ export class PresentationMode {
 
         this.isPlaying = true;
         this.currentPointIndex = 0;
+
         // Hide points when starting presentation
         this.pointManager.setPointsVisibility(false);
         this.animateToNextPoint();
@@ -23,7 +28,7 @@ export class PresentationMode {
         this.description.style.opacity = '0';
 
         // Reset zoom
-        const img = document.getElementById('uploadedImage');
+        const img = elements.getUploadedImage();
         if (img) {
             img.style.transform = 'scale(1)';
             img.style.transformOrigin = 'center';
@@ -32,7 +37,9 @@ export class PresentationMode {
         // Show points when stopping presentation
         this.pointManager.setPointsVisibility(true);
 
-        cancelAnimationFrame(this.animationFrame);
+        if (this.animationFrame) {
+            cancelAnimationFrame(this.animationFrame);
+        }
     }
 
     animateToNextPoint() {
@@ -40,49 +47,42 @@ export class PresentationMode {
 
         const points = this.pointManager.getPoints();
         const point = points[this.currentPointIndex];
-        const img = document.getElementById('uploadedImage');
+        const img = elements.getUploadedImage();
 
-        // Show description
+        // Show description using typewriter effect
         this.description.style.opacity = '1';
-        this.typeWriter(point.description, this.description);
+        animationUtils.typeWriter(
+            point.description,
+            this.description,
+            presentationSettings.typeWriterSpeed
+        );
 
         // Animate zoom
-        img.style.transform = 'scale(2)';
+        img.style.transform = `scale(${presentationSettings.zoomScale})`;
         img.style.transformOrigin = `${point.x}% ${point.y}%`;
-        img.style.transition = 'transform 1s ease-in-out';
+        img.style.transition = `transform ${presentationSettings.zoomDuration}ms ease-in-out`;
 
+        // Schedule zoom out
         setTimeout(() => {
             if (!this.isPlaying) return;
 
             img.style.transform = 'scale(1)';
 
+            // Schedule next point
             setTimeout(() => {
                 if (!this.isPlaying) return;
 
                 this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
+
                 if (this.currentPointIndex === 0) {
+                    // Add delay before restarting from first point
                     setTimeout(() => {
                         if (this.isPlaying) this.animateToNextPoint();
-                    }, 1000);
+                    }, presentationSettings.transitionDelay);
                 } else {
                     this.animateToNextPoint();
                 }
-            }, 3000);
-        }, 4000);
-    }
-
-    typeWriter(text, element) {
-        let i = 0;
-        element.textContent = '';
-
-        const type = () => {
-            if (i < text.length && this.isPlaying) {
-                element.textContent += text.charAt(i);
-                i++;
-                setTimeout(type, 50);
-            }
-        };
-
-        type();
+            }, presentationSettings.pointDisplayTime);
+        }, presentationSettings.pointDisplayTime);
     }
 }

@@ -1,24 +1,27 @@
+import { elements } from './domElements.js';
+
 export class PointManager {
     constructor(imageContainer, pointList) {
         this.imageContainer = imageContainer;
         this.pointList = pointList;
         this.points = [];
-        this.setupEventListeners();
         this.imageLoaded = false;
         this.draggedPoint = null;
         this.isDragging = false;
-        this.isPresenting = false;  // New flag to track presentation mode
+        this.isPresenting = false;
+
+        this.setupEventListeners();
     }
 
     setupEventListeners() {
         // Listen for image load event
         this.imageContainer.addEventListener('imageLoaded', () => {
             this.imageLoaded = true;
-            this.clear(); // Clear any existing points when new image is loaded
+            this.clear();
         });
 
+        // Click handling for adding new points
         this.imageContainer.addEventListener('click', (e) => {
-            // Only handle click if we're not dragging and the click target isn't a point or the upload prompt
             if (!this.isDragging &&
                 e.target.id !== 'uploadPrompt' &&
                 !e.target.classList.contains('point') &&
@@ -27,18 +30,16 @@ export class PointManager {
             }
         });
 
-        // Add drag event listeners to the container
+        // Drag event listeners
         document.addEventListener('mousemove', (e) => this.handleDrag(e));
-        document.addEventListener('mouseup', (e) => this.stopDrag(e));
-        // We'll keep mouseleave on the container to handle edge cases
-        this.imageContainer.addEventListener('mouseleave', (e) => this.stopDrag(e));
+        document.addEventListener('mouseup', () => this.stopDrag());
+        this.imageContainer.addEventListener('mouseleave', () => this.stopDrag());
     }
 
     handleImageClick(e) {
-        // Check if image exists and is loaded
-        const uploadedImage = document.getElementById('uploadedImage');
+        const uploadedImage = elements.getUploadedImage();
         if (!uploadedImage || !this.imageLoaded || uploadedImage.style.display === 'none') {
-            return; // Don't create points if no image is loaded
+            return;
         }
 
         const rect = this.imageContainer.getBoundingClientRect();
@@ -59,11 +60,11 @@ export class PointManager {
         pointContainer.style.transform = 'translate(-50%, -50%)';
         pointContainer.style.cursor = 'move';
 
-        // Create the point circle
+        // Create point circle
         const point = document.createElement('div');
         point.className = 'point';
 
-        // Create the number label
+        // Create number label
         const number = document.createElement('div');
         number.className = 'point-number';
         number.textContent = (this.points.length + 1).toString();
@@ -72,7 +73,7 @@ export class PointManager {
         pointContainer.appendChild(point);
         pointContainer.appendChild(number);
 
-        // Add mousedown event for drag start
+        // Add drag start handling
         pointContainer.addEventListener('mousedown', (e) => {
             e.preventDefault(); // Prevent text selection during drag
             e.stopPropagation(); // Prevent creating new point
@@ -124,7 +125,7 @@ export class PointManager {
         this.draggedPoint.element.style.top = y + '%';
     }
 
-    stopDrag(e) {
+    stopDrag() {
         if (this.draggedPoint) {
             this.draggedPoint.element.style.zIndex = '';
             this.draggedPoint.element.style.opacity = '';
@@ -162,7 +163,7 @@ export class PointManager {
         });
     }
 
-    // New method to toggle point visibility
+    // Toggle point visibility
     setPointsVisibility(visible) {
         this.isPresenting = !visible;
         this.points.forEach(point => {

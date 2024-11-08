@@ -1,3 +1,6 @@
+import { elements } from './domElements.js';
+import { fileUtils } from './utils.js';
+
 export class ImageHandler {
     constructor(imageContainer, uploadPrompt, fileInput) {
         this.imageContainer = imageContainer;
@@ -7,12 +10,16 @@ export class ImageHandler {
     }
 
     setupEventListeners() {
+        // Prevent click propagation to imageContainer
         this.uploadPrompt.addEventListener('click', (e) => {
-            e.stopPropagation(); // Prevent click from bubbling to imageContainer
+            e.stopPropagation();
             this.fileInput.click();
         });
 
+        // File input change handler
         this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+
+        // Setup drag and drop
         this.setupDragAndDrop();
     }
 
@@ -43,12 +50,17 @@ export class ImageHandler {
         }
     }
 
-    handleFile(file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
+    async handleFile(file) {
+        try {
+            // Use fileUtils to read the file
+            const dataUrl = await fileUtils.readFile(file);
+
+            // Hide upload prompt
             this.uploadPrompt.style.display = 'none';
+
+            // Create and setup image
             const img = new Image();
-            img.src = e.target.result;
+            img.src = dataUrl;
             img.id = 'uploadedImage';
 
             // When image is loaded, dispatch the imageLoaded event
@@ -57,7 +69,8 @@ export class ImageHandler {
                 const imageLoadedEvent = new Event('imageLoaded');
                 this.imageContainer.dispatchEvent(imageLoadedEvent);
             };
-        };
-        reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Error handling file:', error);
+        }
     }
 }
