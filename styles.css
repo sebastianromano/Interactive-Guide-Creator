@@ -1,0 +1,148 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: Arial, sans-serif;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+
+.container {
+    display: flex;
+    gap: 20px;
+    max-width: 1600px;
+    margin: 0 auto;
+}
+
+.left-panel {
+    flex: 1;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.right-panel {
+    width: 300px;
+    background: white;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.mode-selector {
+    margin-bottom: 20px;
+    text-align: center;
+}
+
+.mode-btn {
+    padding: 10px 20px;
+    margin: 0 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 16px;
+    transition: background-color 0.3s;
+}
+
+.mode-btn.active {
+    background-color: #4CAF50;
+    color: white;
+}
+
+.mode-btn:not(.active) {
+    background-color: #ddd;
+}
+
+.image-container {
+    position: relative;
+    overflow: hidden;
+    margin: 0 auto;
+    background-color: #eee;
+    min-height: 300px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#uploadedImage {
+    max-width: 100%;
+    height: auto;
+}
+
+.point {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background-color: rgba(255, 0, 0, 0.5);
+    border: 2px solid red;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    cursor: pointer;
+}
+
+.point-list {
+    margin-top: 20px;
+}
+
+.point-item {
+    margin-bottom: 10px;
+    padding: 10px;
+    background-color: #f5f5f5;
+    border-radius: 4px;
+}
+
+.point-item textarea {
+    width: 100%;
+    margin-top: 5px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    resize: vertical;
+}
+
+#description {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 15px 25px;
+    border-radius: 8px;
+    text-align: center;
+    opacity: 0;
+    transition: opacity 0.3s;
+}
+
+#uploadPrompt {
+    text-align: center;
+    padding: 40px;
+    border: 2px dashed #ccc;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+#controls {
+    margin-top: 20px;
+    text-align: center;
+}
+
+.control-btn {
+    padding: 10px 20px;
+    margin: 0 5px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #4CAF50;
+    color: white;
+    font-size: 14px;
+}
+
+.control-btn:disabled {
+    background-color: #ddd;
+    cursor: not-allowed;
+}
