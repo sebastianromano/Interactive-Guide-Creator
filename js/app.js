@@ -26,32 +26,15 @@ class App {
         this.presentationMode = new PresentationMode(this.pointManager, this.description);
         this.videoRecorder = new VideoRecorder(this.rightPanel);
 
-        // Set initial state
-        this.currentMode = 'edit';
+        // Set initial button states
+        this.startButton.disabled = false;
+        this.stopButton.disabled = true;
     }
 
     setupEventListeners() {
-        // Mode selection
-        document.querySelectorAll('.mode-btn').forEach(btn => {
-            btn.addEventListener('click', () => this.handleModeChange(btn));
-        });
-
         // Presentation controls
         this.startButton.addEventListener('click', () => this.startPresentation());
         this.stopButton.addEventListener('click', () => this.stopPresentation());
-    }
-
-    handleModeChange(btn) {
-        document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        this.currentMode = btn.dataset.mode;
-
-        if (this.currentMode === 'view') {
-            this.startButton.disabled = false;
-        } else {
-            this.stopPresentation();
-            this.startButton.disabled = true;
-        }
     }
 
     startPresentation() {
