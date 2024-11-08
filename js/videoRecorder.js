@@ -147,8 +147,9 @@ export class VideoRecorder {
 
     createRecordButton() {
         const button = document.createElement('button');
-        button.className = 'control-btn';
-        button.textContent = 'Record Video';
+        button.className = 'round-button record';
+        button.setAttribute('aria-label', 'Record Video');
+        button.innerHTML = '<svg><use href="#icon-record"/></svg>';
         button.onclick = () => this.toggleRecording();
         return button;
     }
@@ -175,8 +176,12 @@ export class VideoRecorder {
     toggleRecording() {
         if (!this.isRecording) {
             this.startRecording();
+            this.recordButton.classList.add('recording');
+            this.recordButton.setAttribute('aria-label', 'Stop Recording');
         } else {
             this.stopRecording();
+            this.recordButton.classList.remove('recording');
+            this.recordButton.setAttribute('aria-label', 'Record Video');
         }
     }
 

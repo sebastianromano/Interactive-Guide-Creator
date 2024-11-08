@@ -31,7 +31,21 @@ class App {
 
     setupEventListeners() {
         // Presentation controls
-        this.toggleButton.addEventListener('click', () => this.togglePresentation());
+        toggleButton.addEventListener('click', () => {
+            if (!this.isPresenting) {
+                toggleButton.classList.remove('start');
+                toggleButton.classList.add('stop');
+                toggleButton.setAttribute('aria-label', 'Stop Presentation');
+                toggleButton.querySelector('svg use').setAttribute('href', '#icon-stop');
+                this.startPresentation();
+            } else {
+                toggleButton.classList.remove('stop');
+                toggleButton.classList.add('start');
+                toggleButton.setAttribute('aria-label', 'Start Presentation');
+                toggleButton.querySelector('svg use').setAttribute('href', '#icon-play');
+                this.stopPresentation();
+            }
+        });
     }
 
     togglePresentation() {
@@ -46,10 +60,10 @@ class App {
         this.presentationMode.start();
         this.isPresenting = true;
 
-        // Update button appearance
-        this.toggleButton.textContent = 'Stop';
         this.toggleButton.classList.remove('start');
         this.toggleButton.classList.add('stop');
+        this.toggleButton.setAttribute('aria-label', 'Stop Presentation');
+        this.toggleButton.querySelector('svg use').setAttribute('href', '#icon-stop');
 
         if (this.videoRecorder.isRecording) {
             const img = document.getElementById('uploadedImage');
@@ -61,10 +75,10 @@ class App {
         this.presentationMode.stop();
         this.isPresenting = false;
 
-        // Update button appearance
-        this.toggleButton.textContent = 'Start';
         this.toggleButton.classList.remove('stop');
         this.toggleButton.classList.add('start');
+        this.toggleButton.setAttribute('aria-label', 'Start Presentation');
+        this.toggleButton.querySelector('svg use').setAttribute('href', '#icon-play');
     }
 }
 
