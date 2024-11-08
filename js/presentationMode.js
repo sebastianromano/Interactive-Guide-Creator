@@ -27,7 +27,7 @@ export class PresentationMode {
         this.isPlaying = false;
         this.description.style.opacity = '0';
 
-        // Reset zoom
+        // Reset zoom and transform
         const img = elements.getUploadedImage();
         if (img) {
             img.style.transform = 'scale(1)';
@@ -57,19 +57,45 @@ export class PresentationMode {
             presentationSettings.typeWriterSpeed
         );
 
-        // Animate zoom
-        img.style.transform = `scale(${presentationSettings.zoomScale})`;
-        img.style.transformOrigin = `${point.x}% ${point.y}%`;
-        img.style.transition = `transform ${presentationSettings.zoomDuration}ms ease-in-out`;
+        // Different zoom behavior based on point type
+        if (point.type === 'area') {
+            // Calculate zoom scale based on area dimensions
+            const containerAspect = img.offsetWidth / img.offsetHeight;
+            const selectionAspect = point.area.width / point.area.height;
+
+            // Calculate scale needed to fit the selected area
+            // Add a small padding factor (0.9) to ensure the area doesn't touch the edges
+            const scaleX = (100 / point.area.width) * 0.9;
+            const scaleY = (100 / point.area.height) * 0.9;
+            const scale = Math.min(scaleX, scaleY);
+
+            // Center of the selected area
+            const centerX = point.area.left + (point.area.width / 2);
+            const centerY = point.area.top + (point.area.height / 2);
+
+            // Animate zoom with easing
+            this.animateZoom(img, {
+                scale,
+                centerX,
+                centerY,
+                isArea: true
+            });
+        } else {
+            // Original point zoom behavior
+            this.animateZoom(img, {
+                scale: presentationSettings.zoomScale,
+                centerX: point.x,
+                centerY: point.y,
+                isArea: false
+            });
+        }
 
         // Schedule zoom out
         setTimeout(() => {
             if (!this.isPlaying) return;
 
-            img.style.transform = 'scale(1)';
-
-            // Schedule next point
-            setTimeout(() => {
+            // Animate zoom out
+            this.animateZoomOut(img, () => {
                 if (!this.isPlaying) return;
 
                 this.currentPointIndex = (this.currentPointIndex + 1) % points.length;
@@ -82,7 +108,90 @@ export class PresentationMode {
                 } else {
                     this.animateToNextPoint();
                 }
-            }, presentationSettings.pointDisplayTime);
+            });
         }, presentationSettings.pointDisplayTime);
+    }
+
+    animateZoom(img, { scale, centerX, centerY, isArea }) {
+        const startScale = parseFloat(img.style.transform?.match(/scale\((.*?)\)/)?.[1] || 1);
+        const startTime = performance.now();
+        const duration = presentationSettings.zoomDuration;
+
+        // Get the current transform origin or default to center
+        const currentOrigin = img.style.transformOrigin || 'center';
+        const [startX, startY] = currentOrigin.split(' ').map(val =>
+            parseFloat(val.replace('%', '')) || 50
+        );
+
+        const animate = (currentTime) => {
+            if (!this.isPlaying) return;
+
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+
+            // Cubic easing function
+            const eased = this.easeInOutCubic(progress);
+
+            // Interpolate scale and position
+            const currentScale = startScale + (scale - startScale) * eased;
+            const currentX = startX + (centerX - startX) * eased;
+            const currentY = startY + (centerY - startY) * eased;
+
+            // Apply transform
+            img.style.transformOrigin = `${currentX}% ${currentY}%`;
+            img.style.transform = `scale(${currentScale})`;
+
+            // Add subtle motion blur during animation
+            img.style.filter = progress < 1 ? 'blur(0.5px)' : 'none';
+
+            if (progress < 1) {
+                this.animationFrame = requestAnimationFrame(animate);
+            } else {
+                // Clear blur at the end of animation
+                img.style.filter = 'none';
+            }
+        };
+
+        this.animationFrame = requestAnimationFrame(animate);
+    }
+
+    animateZoomOut(img, callback) {
+        const startScale = parseFloat(img.style.transform?.match(/scale\((.*?)\)/)?.[1] || 1);
+        const startTime = performance.now();
+        const duration = presentationSettings.zoomDuration;
+
+        const animate = (currentTime) => {
+            if (!this.isPlaying) return;
+
+            const elapsed = currentTime - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const eased = this.easeInOutCubic(progress);
+
+            // Interpolate back to scale(1)
+            const currentScale = startScale + (1 - startScale) * eased;
+
+            // Apply transform
+            img.style.transform = `scale(${currentScale})`;
+
+            // Add subtle motion blur during animation
+            img.style.filter = progress < 1 ? 'blur(0.5px)' : 'none';
+
+            if (progress < 1) {
+                this.animationFrame = requestAnimationFrame(animate);
+            } else {
+                // Clear blur and reset transform at the end
+                img.style.filter = 'none';
+                img.style.transformOrigin = 'center';
+                if (callback) callback();
+            }
+        };
+
+        this.animationFrame = requestAnimationFrame(animate);
+    }
+
+    easeInOutCubic(x) {
+        return x < 0.5 ?
+            4 * x * x * x :
+            1 - Math.pow(-2 * x + 2, 3) / 2;
     }
 }
