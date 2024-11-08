@@ -44,6 +44,7 @@ class App {
 
         if (this.videoRecorder.isRecording) {
             const img = document.getElementById('uploadedImage');
+            // Note: Points will not be visible in the recording during presentation
             this.videoRecorder.drawFrame(img, this.pointManager.getPoints(), 0);
         }
     }

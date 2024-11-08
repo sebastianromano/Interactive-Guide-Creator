@@ -7,6 +7,7 @@ export class PointManager {
         this.imageLoaded = false;
         this.draggedPoint = null;
         this.isDragging = false;
+        this.isPresenting = false;  // New flag to track presentation mode
     }
 
     setupEventListeners() {
@@ -137,6 +138,14 @@ export class PointManager {
 
             item.appendChild(textarea);
             this.pointList.appendChild(item);
+        });
+    }
+
+    // New method to toggle point visibility
+    setPointsVisibility(visible) {
+        this.isPresenting = !visible;
+        this.points.forEach(point => {
+            point.element.style.display = visible ? 'block' : 'none';
         });
     }
 

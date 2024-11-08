@@ -13,6 +13,8 @@ export class PresentationMode {
 
         this.isPlaying = true;
         this.currentPointIndex = 0;
+        // Hide points when starting presentation
+        this.pointManager.setPointsVisibility(false);
         this.animateToNextPoint();
     }
 
@@ -26,6 +28,9 @@ export class PresentationMode {
             img.style.transform = 'scale(1)';
             img.style.transformOrigin = 'center';
         }
+
+        // Show points when stopping presentation
+        this.pointManager.setPointsVisibility(true);
 
         cancelAnimationFrame(this.animationFrame);
     }
