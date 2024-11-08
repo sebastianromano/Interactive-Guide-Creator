@@ -16,8 +16,7 @@ class App {
         this.fileInput = document.getElementById('fileInput');
         this.pointList = document.getElementById('pointList');
         this.description = document.getElementById('description');
-        this.startButton = document.getElementById('startButton');
-        this.stopButton = document.getElementById('stopButton');
+        this.toggleButton = document.getElementById('toggleButton');
         this.rightPanel = document.querySelector('.right-panel');
 
         // Initialize components
@@ -26,33 +25,46 @@ class App {
         this.presentationMode = new PresentationMode(this.pointManager, this.description);
         this.videoRecorder = new VideoRecorder(this.rightPanel);
 
-        // Set initial button states
-        this.startButton.disabled = false;
-        this.stopButton.disabled = true;
+        // Track presentation state
+        this.isPresenting = false;
     }
 
     setupEventListeners() {
         // Presentation controls
-        this.startButton.addEventListener('click', () => this.startPresentation());
-        this.stopButton.addEventListener('click', () => this.stopPresentation());
+        this.toggleButton.addEventListener('click', () => this.togglePresentation());
+    }
+
+    togglePresentation() {
+        if (!this.isPresenting) {
+            this.startPresentation();
+        } else {
+            this.stopPresentation();
+        }
     }
 
     startPresentation() {
         this.presentationMode.start();
-        this.startButton.disabled = true;
-        this.stopButton.disabled = false;
+        this.isPresenting = true;
+
+        // Update button appearance
+        this.toggleButton.textContent = 'Stop';
+        this.toggleButton.classList.remove('start');
+        this.toggleButton.classList.add('stop');
 
         if (this.videoRecorder.isRecording) {
             const img = document.getElementById('uploadedImage');
-            // Note: Points will not be visible in the recording during presentation
             this.videoRecorder.drawFrame(img, this.pointManager.getPoints(), 0);
         }
     }
 
     stopPresentation() {
         this.presentationMode.stop();
-        this.startButton.disabled = false;
-        this.stopButton.disabled = true;
+        this.isPresenting = false;
+
+        // Update button appearance
+        this.toggleButton.textContent = 'Start';
+        this.toggleButton.classList.remove('stop');
+        this.toggleButton.classList.add('start');
     }
 }
 
