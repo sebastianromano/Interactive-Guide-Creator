@@ -1,5 +1,5 @@
 import { elements } from './domElements.js';
-import { videoSettings } from './settings.js';
+import { videoSettings, presentationSettings } from './settings.js';
 import { drawingUtils, fileUtils } from './utils.js';
 
 export class VideoRecorder {
@@ -9,21 +9,15 @@ export class VideoRecorder {
         this.canvas = document.createElement('canvas');
         this.ctx = this.canvas.getContext('2d');
         this.isRecording = false;
+        this.currentPointIndex = 0;
         this.parentElement = parentElement;
-
-        // Initialize with default settings
         this.settings = { ...videoSettings };
-
-        // Create and add settings panel
         this.settingsPanel = this.createSettingsPanel();
-
-        // Initialize UI and setup record button
         this.initializeUI();
         this.setupRecordButton();
     }
 
     setupRecordButton() {
-        // Make sure recordButton exists before adding listener
         if (elements.recordButton) {
             elements.recordButton.addEventListener('click', () => this.toggleRecording());
         }
@@ -151,17 +145,110 @@ export class VideoRecorder {
         this.recordedChunks = [];
         this.mediaRecorder.start();
         this.isRecording = true;
-
-        // Start presentation and drawing
-        window.startPresentation();
+        this.currentPointIndex = 0;
+        this.startRecordingSequence();
     }
 
-    stopRecording() {
-        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
-            this.mediaRecorder.stop();
-            this.isRecording = false;
-            window.stopPresentation();
+    async startRecordingSequence() {
+        const img = elements.getUploadedImage();
+        const points = window.pointManager.getPoints();
+        if (!img || points.length === 0) return;
+
+        for (let i = 0; i < points.length; i++) {
+            // Draw initial state
+            await this.drawFrameWithZoom(img, points, i, 1);
+            await this.sleep(500); // Short pause before zoom
+
+            // Zoom in
+            await this.animateZoom(img, points, i, 1, presentationSettings.zoomScale, presentationSettings.zoomDuration);
+            await this.sleep(presentationSettings.pointDisplayTime);
+
+            // Zoom out
+            await this.animateZoom(img, points, i, presentationSettings.zoomScale, 1, presentationSettings.zoomDuration);
+
+            // Pause between points
+            if (i < points.length - 1) {
+                await this.sleep(presentationSettings.transitionDelay);
+            }
         }
+
+        this.stopRecording();
+    }
+
+    async animateZoom(img, points, pointIndex, startScale, endScale, duration) {
+        const steps = duration / (1000 / this.settings.fps);
+        const scaleStep = (endScale - startScale) / steps;
+
+        for (let i = 0; i <= steps; i++) {
+            const currentScale = startScale + (scaleStep * i);
+            await this.drawFrameWithZoom(img, points, pointIndex, currentScale);
+            await this.sleep(1000 / this.settings.fps);
+        }
+    }
+
+    async drawFrameWithZoom(imageElement, points, pointIndex, scale) {
+        const point = points[pointIndex];
+
+        // Clear the canvas
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+        // Calculate base scaling to fit image in canvas
+        const baseScale = Math.min(
+            this.canvas.width / imageElement.naturalWidth,
+            this.canvas.height / imageElement.naturalHeight
+        );
+        const scaledWidth = imageElement.naturalWidth * baseScale;
+        const scaledHeight = imageElement.naturalHeight * baseScale;
+
+        // Calculate zoom center point
+        const centerX = (point.x / 100) * scaledWidth;
+        const centerY = (point.y / 100) * scaledHeight;
+
+        // Calculate offsets for centered image
+        const baseOffsetX = (this.canvas.width - scaledWidth) / 2;
+        const baseOffsetY = (this.canvas.height - scaledHeight) / 2;
+
+        // Save context state
+        this.ctx.save();
+
+        // Move to zoom center point
+        this.ctx.translate(
+            baseOffsetX + centerX,
+            baseOffsetY + centerY
+        );
+
+        // Apply zoom scale
+        this.ctx.scale(scale, scale);
+
+        // Move back
+        this.ctx.translate(
+            -(baseOffsetX + centerX),
+            -(baseOffsetY + centerY)
+        );
+
+        // Draw image
+        this.ctx.drawImage(
+            imageElement,
+            baseOffsetX,
+            baseOffsetY,
+            scaledWidth,
+            scaledHeight
+        );
+
+        // Draw points
+        drawingUtils.drawPoints(this.ctx, points, pointIndex, baseOffsetX, baseOffsetY, scaledWidth, scaledHeight);
+
+        // Restore context state
+        this.ctx.restore();
+
+        // Draw description
+        if (point.description) {
+            drawingUtils.drawDescription(this.ctx, point.description, this.canvas.width, this.canvas.height);
+        }
+    }
+
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
     }
 
     setupRecording() {
@@ -201,36 +288,10 @@ export class VideoRecorder {
         }, 100);
     }
 
-    drawFrame(imageElement, points, currentPointIndex) {
-        if (!this.isRecording) return;
-
-        const point = points[currentPointIndex];
-
-        // Setup high-quality rendering
-        this.ctx.imageSmoothingEnabled = true;
-        this.ctx.imageSmoothingQuality = 'high';
-        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-        // Calculate scaling and positioning
-        const scale = Math.min(
-            this.canvas.width / imageElement.naturalWidth,
-            this.canvas.height / imageElement.naturalHeight
-        );
-        const scaledWidth = imageElement.naturalWidth * scale;
-        const scaledHeight = imageElement.naturalHeight * scale;
-        const offsetX = (this.canvas.width - scaledWidth) / 2;
-        const offsetY = (this.canvas.height - scaledHeight) / 2;
-
-        // Draw image
-        this.ctx.drawImage(imageElement, offsetX, offsetY, scaledWidth, scaledHeight);
-
-        // Draw points and description using utility functions
-        drawingUtils.drawPoints(this.ctx, points, currentPointIndex, offsetX, offsetY, scaledWidth, scaledHeight);
-
-        if (point.description) {
-            drawingUtils.drawDescription(this.ctx, point.description, this.canvas.width, this.canvas.height);
+    stopRecording() {
+        if (this.mediaRecorder && this.mediaRecorder.state !== 'inactive') {
+            this.mediaRecorder.stop();
+            this.isRecording = false;
         }
-
-        requestAnimationFrame(() => this.drawFrame(imageElement, points, currentPointIndex));
     }
 }

@@ -31,6 +31,10 @@ class App {
         );
         this.videoRecorder = new VideoRecorder(elements.rightPanel);
 
+        // Make components globally accessible for the video recorder
+        window.pointManager = this.pointManager;
+        window.presentationMode = this.presentationMode;
+
         // Track presentation state
         this.isPresenting = false;
     }
